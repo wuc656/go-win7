@@ -21,8 +21,8 @@ jobs:
       contents: write
     strategy:
       matrix:
-        goos: [windows, linux]
-        goarch: [amd64, 386]
+        goos: [windows]
+        goarch: [amd64]
         buildtarget: ['go1.23.6']
       fail-fast: false
     env:
