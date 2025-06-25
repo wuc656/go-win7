@@ -67,10 +67,9 @@ jobs:
 
       - name: Build patched Go
         shell: bash
-        run: |
+        run: | #"$GOTOOLDIR/dist" banner
           cd ./src
           . ./make.bash "$@" --no-banner
-        #"$GOTOOLDIR/dist" banner
           cd ..
 
       - name: Copy binaries into bin
