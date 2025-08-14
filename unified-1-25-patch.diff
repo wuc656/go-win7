@@ -1,8 +1,8 @@
 diff --git a/src/crypto/internal/sysrand/rand_windows.go b/src/crypto/internal/sysrand/rand_windows.go
-index 91f1490c15cda3..517c41cfb42c6a 100644
+index 91f1490c15cda3..0c9f06787d0fb3 100644
 --- a/src/crypto/internal/sysrand/rand_windows.go
 +++ b/src/crypto/internal/sysrand/rand_windows.go
-@@ -7,5 +7,8 @@ package sysrand
+@@ -7,5 +7,26 @@ package sysrand
  import "internal/syscall/windows"
  
  func read(b []byte) error {
@@ -11,6 +11,24 @@ index 91f1490c15cda3..517c41cfb42c6a 100644
 +	// most 1<<31-1 bytes at a time so that  this works the same on 32-bit
 +	// and 64-bit systems.
 +	return batched(windows.RtlGenRandom, 1<<31-1)(b)
++}
++
++// batched returns a function that calls f to populate a []byte by chunking it
++// into subslices of, at most, readMax bytes.
++func batched(f func([]byte) error, readMax int) func([]byte) error {
++	return func(out []byte) error {
++		for len(out) > 0 {
++			read := len(out)
++			if read > readMax {
++				read = readMax
++			}
++			if err := f(out[:read]); err != nil {
++				return err
++			}
++			out = out[read:]
++		}
++		return nil
++	}
  }
 diff --git a/src/crypto/rand/rand.go b/src/crypto/rand/rand.go
 index 1ca16caa9563e6..454a8275c13716 100644
@@ -26,10 +44,10 @@ index 1ca16caa9563e6..454a8275c13716 100644
  //   - On wasip1/wasm, Reader uses random_get.
  //
 diff --git a/src/internal/syscall/windows/syscall_windows.go b/src/internal/syscall/windows/syscall_windows.go
-index c848f92d1fdde2..715d07249cfc99 100644
+index 905cabc81e4798..94d280b4b470d0 100644
 --- a/src/internal/syscall/windows/syscall_windows.go
 +++ b/src/internal/syscall/windows/syscall_windows.go
-@@ -416,7 +416,7 @@ func ErrorLoadingGetTempPath2() error {
+@@ -419,7 +419,7 @@ func ErrorLoadingGetTempPath2() error {
  //sys	DestroyEnvironmentBlock(block *uint16) (err error) = userenv.DestroyEnvironmentBlock
  //sys	CreateEvent(eventAttrs *SecurityAttributes, manualReset uint32, initialState uint32, name *uint16) (handle syscall.Handle, err error) = kernel32.CreateEventW
  
@@ -39,7 +57,7 @@ index c848f92d1fdde2..715d07249cfc99 100644
  type FILE_ID_BOTH_DIR_INFO struct {
  	NextEntryOffset uint32
 diff --git a/src/internal/syscall/windows/zsyscall_windows.go b/src/internal/syscall/windows/zsyscall_windows.go
-index 6a6ea7bdc06ba8..9a096cfc5b7691 100644
+index 90cf0b92a49bc4..87d0b9e214f783 100644
 --- a/src/internal/syscall/windows/zsyscall_windows.go
 +++ b/src/internal/syscall/windows/zsyscall_windows.go
 @@ -38,7 +38,6 @@ func errnoErr(e syscall.Errno) error {
@@ -58,8 +76,8 @@ index 6a6ea7bdc06ba8..9a096cfc5b7691 100644
 +	procSystemFunction036                 = modadvapi32.NewProc("SystemFunction036")
  	procGetAdaptersAddresses              = modiphlpapi.NewProc("GetAdaptersAddresses")
  	procCreateEventW                      = modkernel32.NewProc("CreateEventW")
- 	procGetACP                            = modkernel32.NewProc("GetACP")
-@@ -236,12 +235,12 @@ func SetTokenInformation(tokenHandle syscall.Token, tokenInformationClass uint32
+ 	procCreateIoCompletionPort            = modkernel32.NewProc("CreateIoCompletionPort")
+@@ -242,12 +241,12 @@ func SetTokenInformation(tokenHandle syscall.Token, tokenInformationClass uint32
  	return
  }
  
@@ -75,10 +93,10 @@ index 6a6ea7bdc06ba8..9a096cfc5b7691 100644
  		err = errnoErr(e1)
  	}
 diff --git a/src/runtime/os_windows.go b/src/runtime/os_windows.go
-index 7183e79f7df093..99e2245900cebd 100644
+index 8f77cd50f87714..5de14c387f92c3 100644
 --- a/src/runtime/os_windows.go
 +++ b/src/runtime/os_windows.go
-@@ -128,8 +128,15 @@ var (
+@@ -127,8 +127,15 @@ var (
  	_WriteFile,
  	_ stdFunction
  
@@ -96,7 +114,7 @@ index 7183e79f7df093..99e2245900cebd 100644
  
  	// Load ntdll.dll manually during startup, otherwise Mingw
  	// links wrong printf function to cgo executable (see issue
-@@ -147,10 +154,10 @@ var (
+@@ -146,10 +153,10 @@ var (
  )
  
  var (
@@ -111,7 +129,7 @@ index 7183e79f7df093..99e2245900cebd 100644
  )
  
  // Function to be called by windows CreateThread
-@@ -264,11 +271,11 @@ func windows_QueryPerformanceFrequency() int64 {
+@@ -263,11 +270,11 @@ func windows_QueryPerformanceFrequency() int64 {
  }
  
  func loadOptionalSyscalls() {
@@ -127,7 +145,7 @@ index 7183e79f7df093..99e2245900cebd 100644
  
  	n32 := windowsLoadSystemLib(ntdlldll[:])
  	if n32 == 0 {
-@@ -501,7 +508,7 @@ func osinit() {
+@@ -500,7 +507,7 @@ func osinit() {
  //go:nosplit
  func readRandom(r []byte) int {
  	n := 0
@@ -163,7 +181,7 @@ index 967ce6795aedb7..0197feb3f199aa 100644
  
 diff --git a/src/net/internal/socktest/main_windows_test.go b/src/net/internal/socktest/main_windows_test.go
 new file mode 100644
-index 00000000000000..df1cb97784b517
+index 00000000000000..bd9006da2be17a
 --- /dev/null
 +++ b/src/net/internal/socktest/main_windows_test.go
 @@ -0,0 +1,22 @@
@@ -233,10 +251,10 @@ index 2f024460751b54..6f02d18b8ef60f 100644
  func (sw *Switch) WSASocket(family, sotype, proto int32, protinfo *syscall.WSAProtocolInfo, group uint32, flags uint32) (s syscall.Handle, err error) {
  	sw.once.Do(sw.init)
 diff --git a/src/net/main_windows_test.go b/src/net/main_windows_test.go
-index bc024c0bbd82d0..07f21b72eb1fcc 100644
+index 425030133535ca..a85841aa204abe 100644
 --- a/src/net/main_windows_test.go
 +++ b/src/net/main_windows_test.go
-@@ -8,6 +8,7 @@ import "internal/poll"
+@@ -12,6 +12,7 @@ import (
  
  var (
  	// Placeholders for saving original socket system calls.
@@ -244,7 +262,7 @@ index bc024c0bbd82d0..07f21b72eb1fcc 100644
  	origWSASocket   = wsaSocketFunc
  	origClosesocket = poll.CloseFunc
  	origConnect     = connectFunc
-@@ -17,6 +18,7 @@ var (
+@@ -21,6 +22,7 @@ var (
  )
  
  func installTestHooks() {
@@ -252,7 +270,7 @@ index bc024c0bbd82d0..07f21b72eb1fcc 100644
  	wsaSocketFunc = sw.WSASocket
  	poll.CloseFunc = sw.Closesocket
  	connectFunc = sw.Connect
-@@ -26,6 +28,7 @@ func installTestHooks() {
+@@ -30,6 +32,7 @@ func installTestHooks() {
  }
  
  func uninstallTestHooks() {
@@ -287,7 +305,7 @@ index a519909bb045c2..294fc140a38c06 100644
  		return syscall.InvalidHandle, os.NewSyscallError("socket", err)
  	}
 diff --git a/src/syscall/exec_windows.go b/src/syscall/exec_windows.go
-index 1220de4cdf1e36..9077d8aec57caf 100644
+index 3ba2fbe0ec3b68..7579fddb9aa266 100644
 --- a/src/syscall/exec_windows.go
 +++ b/src/syscall/exec_windows.go
 @@ -14,7 +14,6 @@ import (
@@ -299,10 +317,10 @@ index 1220de4cdf1e36..9077d8aec57caf 100644
  
  // EscapeArg rewrites command line argument s as prescribed
 diff --git a/src/runtime/os_windows.go b/src/runtime/os_windows.go
-index 99e2245900cebd..6b847b72e2c394 100644
+index 5de14c387f92c3..5cd9bfeed2d726 100644
 --- a/src/runtime/os_windows.go
 +++ b/src/runtime/os_windows.go
-@@ -479,6 +479,28 @@ func initLongPathSupport() {
+@@ -478,6 +478,28 @@ func initLongPathSupport() {
  	canUseLongPaths = true
  }
  
@@ -331,16 +349,16 @@ index 99e2245900cebd..6b847b72e2c394 100644
  func osinit() {
  	asmstdcallAddr = unsafe.Pointer(abi.FuncPCABI0(asmstdcall))
  
-@@ -493,6 +515,7 @@ func osinit() {
+@@ -492,6 +514,7 @@ func osinit() {
  
  	initSysDirectory()
  	initLongPathSupport()
 +	initOsVersionInfo()
  
- 	ncpu = getproccount()
+ 	numCPUStartup = getCPUCount()
  
 diff --git a/src/syscall/exec_windows.go b/src/syscall/exec_windows.go
-index 9077d8aec57caf..65833c56362c8e 100644
+index 7579fddb9aa266..477d88bb04adea 100644
 --- a/src/syscall/exec_windows.go
 +++ b/src/syscall/exec_windows.go
 @@ -253,6 +253,9 @@ type SysProcAttr struct {
@@ -404,10 +422,10 @@ index 9077d8aec57caf..65833c56362c8e 100644
  	// to treat the entire list as empty, so remove NULL handles.
  	j := 0
 diff --git a/src/runtime/os_windows.go b/src/runtime/os_windows.go
-index 6b847b72e2c394..56ab9497c2ec6e 100644
+index 5cd9bfeed2d726..00b63cb8c38b4a 100644
 --- a/src/runtime/os_windows.go
 +++ b/src/runtime/os_windows.go
-@@ -40,8 +40,8 @@ const (
+@@ -39,8 +39,8 @@ const (
  //go:cgo_import_dynamic runtime._GetSystemInfo GetSystemInfo%1 "kernel32.dll"
  //go:cgo_import_dynamic runtime._GetThreadContext GetThreadContext%2 "kernel32.dll"
  //go:cgo_import_dynamic runtime._SetThreadContext SetThreadContext%2 "kernel32.dll"
@@ -417,7 +435,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  //go:cgo_import_dynamic runtime._PostQueuedCompletionStatus PostQueuedCompletionStatus%4 "kernel32.dll"
  //go:cgo_import_dynamic runtime._QueryPerformanceCounter QueryPerformanceCounter%1 "kernel32.dll"
  //go:cgo_import_dynamic runtime._QueryPerformanceFrequency QueryPerformanceFrequency%1 "kernel32.dll"
-@@ -75,7 +75,6 @@ var (
+@@ -74,7 +74,6 @@ var (
  	// Following syscalls are available on every Windows PC.
  	// All these variables are set by the Windows executable
  	// loader before the Go program starts.
@@ -425,7 +443,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  	_AddVectoredExceptionHandler,
  	_CloseHandle,
  	_CreateEventA,
-@@ -98,8 +97,8 @@ var (
+@@ -97,8 +96,8 @@ var (
  	_GetSystemInfo,
  	_GetThreadContext,
  	_SetThreadContext,
@@ -435,7 +453,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  	_PostQueuedCompletionStatus,
  	_QueryPerformanceCounter,
  	_QueryPerformanceFrequency,
-@@ -128,6 +127,14 @@ var (
+@@ -127,6 +126,14 @@ var (
  	_WriteFile,
  	_ stdFunction
  
@@ -450,7 +468,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  	// Use RtlGenRandom to generate cryptographically random data.
  	// This approach has been recommended by Microsoft (see issue
  	// 15589 for details).
-@@ -153,13 +160,6 @@ var (
+@@ -152,13 +159,6 @@ var (
  	_ stdFunction
  )
  
@@ -464,7 +482,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  // Function to be called by windows CreateThread
  // to start new os thread.
  func tstart_stdcall(newm *m)
-@@ -252,8 +252,18 @@ func windows_GetSystemDirectory() string {
+@@ -251,8 +251,18 @@ func windows_GetSystemDirectory() string {
  	return unsafe.String(&sysDirectory[0], sysDirectoryLen)
  }
  
@@ -485,7 +503,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  }
  
  //go:linkname windows_QueryPerformanceCounter internal/syscall/windows.QueryPerformanceCounter
-@@ -271,13 +281,28 @@ func windows_QueryPerformanceFrequency() int64 {
+@@ -270,13 +280,28 @@ func windows_QueryPerformanceFrequency() int64 {
  }
  
  func loadOptionalSyscalls() {
@@ -500,9 +518,9 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
 +	_LoadLibraryExA = windowsFindfunc(k32, []byte("LoadLibraryExA\000"))
 +	_LoadLibraryExW = windowsFindfunc(k32, []byte("LoadLibraryExW\000"))
 +	useLoadLibraryEx = (_LoadLibraryExW != nil && _LoadLibraryExA != nil && _AddDllDirectory != nil)
-+
++	
 +	initSysDirectory()
-+
++	
 +	var advapi32dll = []byte("advapi32.dll\000")
 +	a32 := windowsLoadSystemLib(advapi32dll)
  	if a32 == 0 {
@@ -516,7 +534,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  	if n32 == 0 {
  		throw("ntdll.dll not found")
  	}
-@@ -306,7 +331,7 @@ func monitorSuspendResume() {
+@@ -305,7 +330,7 @@ func monitorSuspendResume() {
  		context  uintptr
  	}
  
@@ -525,7 +543,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  	if powrprof == 0 {
  		return // Running on Windows 7, where we don't need it anyway.
  	}
-@@ -365,6 +390,22 @@ const (
+@@ -364,6 +389,22 @@ const (
  // in sys_windows_386.s and sys_windows_amd64.s:
  func getlasterror() uint32
  
@@ -548,7 +566,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  var timeBeginPeriodRetValue uint32
  
  // osRelaxMinNS indicates that sysmon shouldn't osRelax if the next
-@@ -438,7 +479,8 @@ func initHighResTimer() {
+@@ -437,7 +478,8 @@ func initHighResTimer() {
  		// Only load winmm.dll if we need it.
  		// This avoids a dependency on winmm.dll for Go programs
  		// that run on new Windows versions.
@@ -558,7 +576,7 @@ index 6b847b72e2c394..56ab9497c2ec6e 100644
  		if m32 == 0 {
  			print("runtime: LoadLibraryExW failed; errno=", getlasterror(), "\n")
  			throw("winmm.dll not found")
-@@ -513,7 +555,6 @@ func osinit() {
+@@ -512,7 +554,6 @@ func osinit() {
  	initHighResTimer()
  	timeBeginPeriodRetValue = osRelax(false)
  
@@ -629,29 +647,3 @@ index a7873e6ad8c93e..d9371d35006359 100644
  	} else {
  		h, e = loadlibrary(namep)
  	}
-diff --git a/src/crypto/internal/sysrand/rand_windows.go b/src/crypto/internal/sysrand/rand_windows.go
-index 517c41cfb42c6a..0c9f06787d0fb3 100644
---- a/src/crypto/internal/sysrand/rand_windows.go
-+++ b/src/crypto/internal/sysrand/rand_windows.go
-@@ -12,3 +12,21 @@ func read(b []byte) error {
- 	// and 64-bit systems.
- 	return batched(windows.RtlGenRandom, 1<<31-1)(b)
- }
-+
-+// batched returns a function that calls f to populate a []byte by chunking it
-+// into subslices of, at most, readMax bytes.
-+func batched(f func([]byte) error, readMax int) func([]byte) error {
-+	return func(out []byte) error {
-+		for len(out) > 0 {
-+			read := len(out)
-+			if read > readMax {
-+				read = readMax
-+			}
-+			if err := f(out[:read]); err != nil {
-+				return err
-+			}
-+			out = out[read:]
-+		}
-+		return nil
-+	}
-+}
