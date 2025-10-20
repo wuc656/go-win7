@@ -23,7 +23,7 @@ jobs:
       matrix:
         goos: [windows]
         goarch: [amd64]
-        buildtarget: ['go1.25.2']
+        buildtarget: ["go1.25.3"]
       fail-fast: false
     env:
       GOOS: ${{ matrix.goos }}
@@ -39,7 +39,7 @@ jobs:
       - name: Download source
         uses: actions/checkout@v4
         with:
-          repository: 'golang/go'
+          repository: "golang/go"
           ref: ${{ matrix.buildtarget }}
 
       # Patches for Go 1.25.x before more minor changes introduces.
@@ -55,7 +55,7 @@ jobs:
       - name: Set-up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'src/go.mod'
+          go-version-file: "src/go.mod"
           check-latest: true
 
       - name: Build patched Go
