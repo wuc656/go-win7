@@ -403,6 +403,11 @@ func callbackWrap(a *callbackArgs) {
 	}
 }
 
+const _LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x00000800
+
+// golang.org/x/sys linknames syscall.getprocaddress
+// (in addition to standard package syscall).
+// Do not remove or change the type signature.
 // syscall_syscalln calls fn with args[:n].
 // It is used to implement [syscall.SyscallN].
 // It shouldn't be used in the runtime package,
