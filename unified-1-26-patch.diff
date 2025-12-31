@@ -1,119 +1,5 @@
-diff --git a/src/os/removeall_at.go b/src/os/removeall_at.go
-index 5ddc1ade6134e5..61298a46bc70df 100644
---- a/src/os/removeall_at.go
-+++ b/src/os/removeall_at.go
-@@ -2,7 +2,7 @@
- // Use of this source code is governed by a BSD-style
- // license that can be found in the LICENSE file.
- 
--//go:build unix || wasip1 || windows
-+//go:build unix || wasip1
- 
- package os
- 
-diff --git a/src/os/removeall_noat.go b/src/os/removeall_noat.go
-index 395a1503d49442..02f6fca70283f7 100644
---- a/src/os/removeall_noat.go
-+++ b/src/os/removeall_noat.go
-@@ -2,7 +2,7 @@
- // Use of this source code is governed by a BSD-style
- // license that can be found in the LICENSE file.
- 
--//go:build (js && wasm) || plan9
-+//go:build (js && wasm) || plan9 || windows
- 
- package os
- 
-diff --git a/src/os/root.go b/src/os/root.go
-index d759727ce7a89b..1ecbcc094f15b0 100644
---- a/src/os/root.go
-+++ b/src/os/root.go
-@@ -189,12 +189,6 @@ func (r *Root) Remove(name string) error {
- 	return rootRemove(r, name)
- }
- 
--// RemoveAll removes the named file or directory and any children that it contains.
--// See [RemoveAll] for more details.
--func (r *Root) RemoveAll(name string) error {
--	return rootRemoveAll(r, name)
--}
--
- // Stat returns a [FileInfo] describing the named file in the root.
- // See [Stat] for more details.
- func (r *Root) Stat(name string) (FileInfo, error) {
-diff --git a/src/os/root_noopenat.go b/src/os/root_noopenat.go
-index 59f1abe91b0b2e..ecdf264f28d7d6 100644
---- a/src/os/root_noopenat.go
-+++ b/src/os/root_noopenat.go
-@@ -11,7 +11,6 @@ import (
- 	"internal/filepathlite"
- 	"internal/stringslite"
- 	"sync/atomic"
--	"syscall"
- 	"time"
- )
- 
-@@ -186,25 +185,6 @@ func rootRemove(r *Root, name string) error {
- 	return nil
- }
- 
--func rootRemoveAll(r *Root, name string) error {
--	if endsWithDot(name) {
--		// Consistency with os.RemoveAll: Return EINVAL when trying to remove .
--		return &PathError{Op: "RemoveAll", Path: name, Err: syscall.EINVAL}
--	}
--	if err := checkPathEscapesLstat(r, name); err != nil {
--		if err == syscall.ENOTDIR {
--			// Some intermediate path component is not a directory.
--			// RemoveAll treats this as success (since the target doesn't exist).
--			return nil
--		}
--		return &PathError{Op: "RemoveAll", Path: name, Err: err}
--	}
--	if err := RemoveAll(joinPath(r.root.name, name)); err != nil {
--		return &PathError{Op: "RemoveAll", Path: name, Err: underlyingError(err)}
--	}
--	return nil
--}
--
- func rootReadlink(r *Root, name string) (string, error) {
- 	if err := checkPathEscapesLstat(r, name); err != nil {
- 		return "", &PathError{Op: "readlinkat", Path: name, Err: err}
-diff --git a/src/os/root_openat.go b/src/os/root_openat.go
-index 192c29e319d394..f5473e75bd6adf 100644
---- a/src/os/root_openat.go
-+++ b/src/os/root_openat.go
-@@ -197,28 +197,6 @@ func rootRemove(r *Root, name string) error {
- 	return nil
- }
- 
--func rootRemoveAll(r *Root, name string) error {
--	// Consistency with os.RemoveAll: Strip trailing /s from the name,
--	// so RemoveAll("not_a_directory/") succeeds.
--	for len(name) > 0 && IsPathSeparator(name[len(name)-1]) {
--		name = name[:len(name)-1]
--	}
--	if endsWithDot(name) {
--		// Consistency with os.RemoveAll: Return EINVAL when trying to remove .
--		return &PathError{Op: "RemoveAll", Path: name, Err: syscall.EINVAL}
--	}
--	_, err := doInRoot(r, name, nil, func(parent sysfdType, name string) (struct{}, error) {
--		return struct{}{}, removeAllFrom(parent, name)
--	})
--	if IsNotExist(err) {
--		return nil
--	}
--	if err != nil {
--		return &PathError{Op: "RemoveAll", Path: name, Err: underlyingError(err)}
--	}
--	return err
--}
--
- func rootRename(r *Root, oldname, newname string) error {
- 	_, err := doInRoot(r, oldname, nil, func(oldparent sysfdType, oldname string) (struct{}, error) {
- 		_, err := doInRoot(r, newname, nil, func(newparent sysfdType, newname string) (struct{}, error) {
 diff --git a/src/crypto/internal/sysrand/rand_windows.go b/src/crypto/internal/sysrand/rand_windows.go
-index 91f1490c15cda3..0c9f06787d0fb3 100644
+index 91f1490c15..0c9f06787d 100644
 --- a/src/crypto/internal/sysrand/rand_windows.go
 +++ b/src/crypto/internal/sysrand/rand_windows.go
 @@ -7,5 +7,26 @@ package sysrand
@@ -145,10 +31,10 @@ index 91f1490c15cda3..0c9f06787d0fb3 100644
 +	}
  }
 diff --git a/src/crypto/rand/rand.go b/src/crypto/rand/rand.go
-index 1ca16caa9563e6..454a8275c13716 100644
+index 018fe013ce..9d183541da 100644
 --- a/src/crypto/rand/rand.go
 +++ b/src/crypto/rand/rand.go
-@@ -22,7 +22,7 @@ import (
+@@ -25,7 +25,7 @@ import (
  //   - On legacy Linux (< 3.17), Reader opens /dev/urandom on first use.
  //   - On macOS, iOS, and OpenBSD Reader, uses arc4random_buf(3).
  //   - On NetBSD, Reader uses the kern.arandom sysctl.
@@ -158,10 +44,10 @@ index 1ca16caa9563e6..454a8275c13716 100644
  //   - On wasip1/wasm, Reader uses random_get.
  //
 diff --git a/src/internal/syscall/windows/syscall_windows.go b/src/internal/syscall/windows/syscall_windows.go
-index 905cabc81e4798..94d280b4b470d0 100644
+index b908a2c251..6f29bd9a43 100644
 --- a/src/internal/syscall/windows/syscall_windows.go
 +++ b/src/internal/syscall/windows/syscall_windows.go
-@@ -419,7 +419,7 @@ func ErrorLoadingGetTempPath2() error {
+@@ -421,7 +421,7 @@ func ErrorLoadingGetTempPath2() error {
  //sys	DestroyEnvironmentBlock(block *uint16) (err error) = userenv.DestroyEnvironmentBlock
  //sys	CreateEvent(eventAttrs *SecurityAttributes, manualReset uint32, initialState uint32, name *uint16) (handle syscall.Handle, err error) = kernel32.CreateEventW
  
@@ -171,17 +57,33 @@ index 905cabc81e4798..94d280b4b470d0 100644
  type FILE_ID_BOTH_DIR_INFO struct {
  	NextEntryOffset uint32
 diff --git a/src/internal/syscall/windows/zsyscall_windows.go b/src/internal/syscall/windows/zsyscall_windows.go
-index 90cf0b92a49bc4..87d0b9e214f783 100644
+index d087fd46f6..626ed0ff90 100644
 --- a/src/internal/syscall/windows/zsyscall_windows.go
 +++ b/src/internal/syscall/windows/zsyscall_windows.go
-@@ -38,7 +38,6 @@ func errnoErr(e syscall.Errno) error {
+@@ -37,15 +37,14 @@ func errnoErr(e syscall.Errno) error {
+ }
  
  var (
- 	modadvapi32         = syscall.NewLazyDLL(sysdll.Add("advapi32.dll"))
+-	modadvapi32         = syscall.NewLazyDLL(sysdll.Add("advapi32.dll"))
 -	modbcryptprimitives = syscall.NewLazyDLL(sysdll.Add("bcryptprimitives.dll"))
- 	modiphlpapi         = syscall.NewLazyDLL(sysdll.Add("iphlpapi.dll"))
- 	modkernel32         = syscall.NewLazyDLL(sysdll.Add("kernel32.dll"))
- 	modnetapi32         = syscall.NewLazyDLL(sysdll.Add("netapi32.dll"))
+-	modiphlpapi         = syscall.NewLazyDLL(sysdll.Add("iphlpapi.dll"))
+-	modkernel32         = syscall.NewLazyDLL(sysdll.Add("kernel32.dll"))
+-	modnetapi32         = syscall.NewLazyDLL(sysdll.Add("netapi32.dll"))
+-	modntdll            = syscall.NewLazyDLL(sysdll.Add("ntdll.dll"))
+-	modpsapi            = syscall.NewLazyDLL(sysdll.Add("psapi.dll"))
+-	moduserenv          = syscall.NewLazyDLL(sysdll.Add("userenv.dll"))
+-	modws2_32           = syscall.NewLazyDLL(sysdll.Add("ws2_32.dll"))
++	modadvapi32 = syscall.NewLazyDLL(sysdll.Add("advapi32.dll"))
++	modiphlpapi = syscall.NewLazyDLL(sysdll.Add("iphlpapi.dll"))
++	modkernel32 = syscall.NewLazyDLL(sysdll.Add("kernel32.dll"))
++	modnetapi32 = syscall.NewLazyDLL(sysdll.Add("netapi32.dll"))
++	modntdll    = syscall.NewLazyDLL(sysdll.Add("ntdll.dll"))
++	modpsapi    = syscall.NewLazyDLL(sysdll.Add("psapi.dll"))
++	moduserenv  = syscall.NewLazyDLL(sysdll.Add("userenv.dll"))
++	modws2_32   = syscall.NewLazyDLL(sysdll.Add("ws2_32.dll"))
+ 
+ 	procAdjustTokenPrivileges             = modadvapi32.NewProc("AdjustTokenPrivileges")
+ 	procDuplicateTokenEx                  = modadvapi32.NewProc("DuplicateTokenEx")
 @@ -63,7 +62,7 @@ var (
  	procQueryServiceStatus                = modadvapi32.NewProc("QueryServiceStatus")
  	procRevertToSelf                      = modadvapi32.NewProc("RevertToSelf")
@@ -191,7 +93,7 @@ index 90cf0b92a49bc4..87d0b9e214f783 100644
  	procGetAdaptersAddresses              = modiphlpapi.NewProc("GetAdaptersAddresses")
  	procCreateEventW                      = modkernel32.NewProc("CreateEventW")
  	procCreateIoCompletionPort            = modkernel32.NewProc("CreateIoCompletionPort")
-@@ -242,12 +241,12 @@ func SetTokenInformation(tokenHandle syscall.Token, tokenInformationClass uint32
+@@ -244,12 +243,12 @@ func SetTokenInformation(tokenHandle syscall.Token, tokenInformationClass uint32
  	return
  }
  
@@ -201,75 +103,13 @@ index 90cf0b92a49bc4..87d0b9e214f783 100644
  	if len(buf) > 0 {
  		_p0 = &buf[0]
  	}
--	r1, _, e1 := syscall.Syscall(procProcessPrng.Addr(), 2, uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)), 0)
-+	r1, _, e1 := syscall.Syscall(procSystemFunction036.Addr(), 2, uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)), 0)
+-	r1, _, e1 := syscall.SyscallN(procProcessPrng.Addr(), uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)))
++	r1, _, e1 := syscall.SyscallN(procSystemFunction036.Addr(), uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)))
  	if r1 == 0 {
  		err = errnoErr(e1)
  	}
-diff --git a/src/runtime/os_windows.go b/src/runtime/os_windows.go
-index 8f77cd50f87714..5de14c387f92c3 100644
---- a/src/runtime/os_windows.go
-+++ b/src/runtime/os_windows.go
-@@ -127,8 +127,15 @@ var (
- 	_WriteFile,
- 	_ stdFunction
- 
--	// Use ProcessPrng to generate cryptographically random data.
--	_ProcessPrng stdFunction
-+	// Use RtlGenRandom to generate cryptographically random data.
-+	// This approach has been recommended by Microsoft (see issue
-+	// 15589 for details).
-+	// The RtlGenRandom is not listed in advapi32.dll, instead
-+	// RtlGenRandom function can be found by searching for SystemFunction036.
-+	// Also some versions of Mingw cannot link to SystemFunction036
-+	// when building executable as Cgo. So load SystemFunction036
-+	// manually during runtime startup.
-+	_RtlGenRandom stdFunction
- 
- 	// Load ntdll.dll manually during startup, otherwise Mingw
- 	// links wrong printf function to cgo executable (see issue
-@@ -146,10 +153,10 @@ var (
- )
- 
- var (
--	bcryptprimitivesdll = [...]uint16{'b', 'c', 'r', 'y', 'p', 't', 'p', 'r', 'i', 'm', 'i', 't', 'i', 'v', 'e', 's', '.', 'd', 'l', 'l', 0}
--	ntdlldll            = [...]uint16{'n', 't', 'd', 'l', 'l', '.', 'd', 'l', 'l', 0}
--	powrprofdll         = [...]uint16{'p', 'o', 'w', 'r', 'p', 'r', 'o', 'f', '.', 'd', 'l', 'l', 0}
--	winmmdll            = [...]uint16{'w', 'i', 'n', 'm', 'm', '.', 'd', 'l', 'l', 0}
-+	advapi32dll = [...]uint16{'a', 'd', 'v', 'a', 'p', 'i', '3', '2', '.', 'd', 'l', 'l', 0}
-+	ntdlldll    = [...]uint16{'n', 't', 'd', 'l', 'l', '.', 'd', 'l', 'l', 0}
-+	powrprofdll = [...]uint16{'p', 'o', 'w', 'r', 'p', 'r', 'o', 'f', '.', 'd', 'l', 'l', 0}
-+	winmmdll    = [...]uint16{'w', 'i', 'n', 'm', 'm', '.', 'd', 'l', 'l', 0}
- )
- 
- // Function to be called by windows CreateThread
-@@ -263,11 +270,11 @@ func windows_QueryPerformanceFrequency() int64 {
- }
- 
- func loadOptionalSyscalls() {
--	bcryptPrimitives := windowsLoadSystemLib(bcryptprimitivesdll[:])
--	if bcryptPrimitives == 0 {
--		throw("bcryptprimitives.dll not found")
-+	a32 := windowsLoadSystemLib(advapi32dll[:])
-+	if a32 == 0 {
-+		throw("advapi32.dll not found")
- 	}
--	_ProcessPrng = windowsFindfunc(bcryptPrimitives, []byte("ProcessPrng\000"))
-+	_RtlGenRandom = windowsFindfunc(a32, []byte("SystemFunction036\000"))
- 
- 	n32 := windowsLoadSystemLib(ntdlldll[:])
- 	if n32 == 0 {
-@@ -500,7 +507,7 @@ func osinit() {
- //go:nosplit
- func readRandom(r []byte) int {
- 	n := 0
--	if stdcall2(_ProcessPrng, uintptr(unsafe.Pointer(&r[0])), uintptr(len(r)))&0xff != 0 {
-+	if stdcall2(_RtlGenRandom, uintptr(unsafe.Pointer(&r[0])), uintptr(len(r)))&0xff != 0 {
- 		n = len(r)
- 	}
- 	return n
 diff --git a/src/net/hook_windows.go b/src/net/hook_windows.go
-index f7c5b5af90fe35..6b82be526e7da5 100644
+index f7c5b5af90..6b82be526e 100644
 --- a/src/net/hook_windows.go
 +++ b/src/net/hook_windows.go
 @@ -13,6 +13,7 @@ var (
@@ -281,7 +121,7 @@ index f7c5b5af90fe35..6b82be526e7da5 100644
  	connectFunc   func(syscall.Handle, syscall.Sockaddr) error                                                = syscall.Connect
  	listenFunc    func(syscall.Handle, int) error                                                             = syscall.Listen
 diff --git a/src/net/internal/socktest/main_test.go b/src/net/internal/socktest/main_test.go
-index 967ce6795aedb7..0197feb3f199aa 100644
+index 967ce6795a..0197feb3f1 100644
 --- a/src/net/internal/socktest/main_test.go
 +++ b/src/net/internal/socktest/main_test.go
 @@ -2,7 +2,7 @@
@@ -295,7 +135,7 @@ index 967ce6795aedb7..0197feb3f199aa 100644
  
 diff --git a/src/net/internal/socktest/main_windows_test.go b/src/net/internal/socktest/main_windows_test.go
 new file mode 100644
-index 00000000000000..bd9006da2be17a
+index 0000000000..df1cb97784
 --- /dev/null
 +++ b/src/net/internal/socktest/main_windows_test.go
 @@ -0,0 +1,22 @@
@@ -322,7 +162,7 @@ index 00000000000000..bd9006da2be17a
 +	closeFunc = syscall.Closesocket
 +}
 diff --git a/src/net/internal/socktest/sys_windows.go b/src/net/internal/socktest/sys_windows.go
-index 2f024460751b54..6f02d18b8ef60f 100644
+index 2f02446075..6f02d18b8e 100644
 --- a/src/net/internal/socktest/sys_windows.go
 +++ b/src/net/internal/socktest/sys_windows.go
 @@ -9,6 +9,38 @@ import (
@@ -365,7 +205,7 @@ index 2f024460751b54..6f02d18b8ef60f 100644
  func (sw *Switch) WSASocket(family, sotype, proto int32, protinfo *syscall.WSAProtocolInfo, group uint32, flags uint32) (s syscall.Handle, err error) {
  	sw.once.Do(sw.init)
 diff --git a/src/net/main_windows_test.go b/src/net/main_windows_test.go
-index 425030133535ca..a85841aa204abe 100644
+index 4250301335..a85841aa20 100644
 --- a/src/net/main_windows_test.go
 +++ b/src/net/main_windows_test.go
 @@ -12,6 +12,7 @@ import (
@@ -393,7 +233,7 @@ index 425030133535ca..a85841aa204abe 100644
  	poll.CloseFunc = origClosesocket
  	connectFunc = origConnect
 diff --git a/src/net/sock_windows.go b/src/net/sock_windows.go
-index a519909bb045c2..294fc140a38c06 100644
+index a519909bb0..294fc140a3 100644
 --- a/src/net/sock_windows.go
 +++ b/src/net/sock_windows.go
 @@ -20,6 +20,21 @@ func maxListenerBacklog() int {
@@ -418,138 +258,135 @@ index a519909bb045c2..294fc140a38c06 100644
  	if err != nil {
  		return syscall.InvalidHandle, os.NewSyscallError("socket", err)
  	}
-diff --git a/src/syscall/exec_windows.go b/src/syscall/exec_windows.go
-index 3ba2fbe0ec3b68..7579fddb9aa266 100644
---- a/src/syscall/exec_windows.go
-+++ b/src/syscall/exec_windows.go
-@@ -14,7 +14,6 @@ import (
- 	"unsafe"
- )
+diff --git a/src/os/removeall_at.go b/src/os/removeall_at.go
+index 5ddc1ade61..61298a46bc 100644
+--- a/src/os/removeall_at.go
++++ b/src/os/removeall_at.go
+@@ -2,7 +2,7 @@
+ // Use of this source code is governed by a BSD-style
+ // license that can be found in the LICENSE file.
  
--// ForkLock is not used on Windows.
- var ForkLock sync.RWMutex
+-//go:build unix || wasip1 || windows
++//go:build unix || wasip1
  
- // EscapeArg rewrites command line argument s as prescribed
-diff --git a/src/runtime/os_windows.go b/src/runtime/os_windows.go
-index 5de14c387f92c3..5cd9bfeed2d726 100644
---- a/src/runtime/os_windows.go
-+++ b/src/runtime/os_windows.go
-@@ -478,6 +478,28 @@ func initLongPathSupport() {
- 	canUseLongPaths = true
+ package os
+ 
+diff --git a/src/os/removeall_noat.go b/src/os/removeall_noat.go
+index 395a1503d4..02f6fca702 100644
+--- a/src/os/removeall_noat.go
++++ b/src/os/removeall_noat.go
+@@ -2,7 +2,7 @@
+ // Use of this source code is governed by a BSD-style
+ // license that can be found in the LICENSE file.
+ 
+-//go:build (js && wasm) || plan9
++//go:build (js && wasm) || plan9 || windows
+ 
+ package os
+ 
+diff --git a/src/os/root.go b/src/os/root.go
+index d759727ce7..1ecbcc094f 100644
+--- a/src/os/root.go
++++ b/src/os/root.go
+@@ -189,12 +189,6 @@ func (r *Root) Remove(name string) error {
+ 	return rootRemove(r, name)
  }
  
-+var osVersionInfo struct {
-+	majorVersion uint32
-+	minorVersion uint32
-+	buildNumber  uint32
-+}
-+
-+func initOsVersionInfo() {
-+	info := _OSVERSIONINFOW{}
-+	info.osVersionInfoSize = uint32(unsafe.Sizeof(info))
-+	stdcall1(_RtlGetVersion, uintptr(unsafe.Pointer(&info)))
-+	osVersionInfo.majorVersion = info.majorVersion
-+	osVersionInfo.minorVersion = info.minorVersion
-+	osVersionInfo.buildNumber = info.buildNumber
-+}
-+
-+//go:linkname rtlGetNtVersionNumbers syscall.rtlGetNtVersionNumbers
-+func rtlGetNtVersionNumbers(majorVersion *uint32, minorVersion *uint32, buildNumber *uint32) {
-+	*majorVersion = osVersionInfo.majorVersion
-+	*minorVersion = osVersionInfo.minorVersion
-+	*buildNumber = osVersionInfo.buildNumber
-+}
-+
- func osinit() {
- 	asmstdcallAddr = unsafe.Pointer(abi.FuncPCABI0(asmstdcall))
+-// RemoveAll removes the named file or directory and any children that it contains.
+-// See [RemoveAll] for more details.
+-func (r *Root) RemoveAll(name string) error {
+-	return rootRemoveAll(r, name)
+-}
+-
+ // Stat returns a [FileInfo] describing the named file in the root.
+ // See [Stat] for more details.
+ func (r *Root) Stat(name string) (FileInfo, error) {
+diff --git a/src/os/root_noopenat.go b/src/os/root_noopenat.go
+index 59f1abe91b..ecdf264f28 100644
+--- a/src/os/root_noopenat.go
++++ b/src/os/root_noopenat.go
+@@ -11,7 +11,6 @@ import (
+ 	"internal/filepathlite"
+ 	"internal/stringslite"
+ 	"sync/atomic"
+-	"syscall"
+ 	"time"
+ )
  
-@@ -492,6 +514,7 @@ func osinit() {
+@@ -186,25 +185,6 @@ func rootRemove(r *Root, name string) error {
+ 	return nil
+ }
  
- 	initSysDirectory()
- 	initLongPathSupport()
-+	initOsVersionInfo()
+-func rootRemoveAll(r *Root, name string) error {
+-	if endsWithDot(name) {
+-		// Consistency with os.RemoveAll: Return EINVAL when trying to remove .
+-		return &PathError{Op: "RemoveAll", Path: name, Err: syscall.EINVAL}
+-	}
+-	if err := checkPathEscapesLstat(r, name); err != nil {
+-		if err == syscall.ENOTDIR {
+-			// Some intermediate path component is not a directory.
+-			// RemoveAll treats this as success (since the target doesn't exist).
+-			return nil
+-		}
+-		return &PathError{Op: "RemoveAll", Path: name, Err: err}
+-	}
+-	if err := RemoveAll(joinPath(r.root.name, name)); err != nil {
+-		return &PathError{Op: "RemoveAll", Path: name, Err: underlyingError(err)}
+-	}
+-	return nil
+-}
+-
+ func rootReadlink(r *Root, name string) (string, error) {
+ 	if err := checkPathEscapesLstat(r, name); err != nil {
+ 		return "", &PathError{Op: "readlinkat", Path: name, Err: err}
+diff --git a/src/os/root_openat.go b/src/os/root_openat.go
+index 83bde5ef14..af95349898 100644
+--- a/src/os/root_openat.go
++++ b/src/os/root_openat.go
+@@ -196,28 +196,6 @@ func rootRemove(r *Root, name string) error {
+ 	return nil
+ }
  
- 	numCPUStartup = getCPUCount()
- 
-diff --git a/src/syscall/exec_windows.go b/src/syscall/exec_windows.go
-index 7579fddb9aa266..477d88bb04adea 100644
---- a/src/syscall/exec_windows.go
-+++ b/src/syscall/exec_windows.go
-@@ -253,6 +253,9 @@ type SysProcAttr struct {
- var zeroProcAttr ProcAttr
- var zeroSysProcAttr SysProcAttr
- 
-+//go:linkname rtlGetNtVersionNumbers
-+func rtlGetNtVersionNumbers(majorVersion *uint32, minorVersion *uint32, buildNumber *uint32)
-+
- func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle uintptr, err error) {
- 	if len(argv0) == 0 {
- 		return 0, 0, EWINDOWS
-@@ -316,6 +319,17 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle
- 		}
- 	}
- 
-+	var maj, min, build uint32
-+	rtlGetNtVersionNumbers(&maj, &min, &build)
-+	isWin7 := maj < 6 || (maj == 6 && min <= 1)
-+	// NT kernel handles are divisible by 4, with the bottom 3 bits left as
-+	// a tag. The fully set tag correlates with the types of handles we're
-+	// concerned about here.  Except, the kernel will interpret some
-+	// special handle values, like -1, -2, and so forth, so kernelbase.dll
-+	// checks to see that those bottom three bits are checked, but that top
-+	// bit is not checked.
-+	isLegacyWin7ConsoleHandle := func(handle Handle) bool { return isWin7 && handle&0x10000003 == 3 }
-+
- 	p, _ := GetCurrentProcess()
- 	parentProcess := p
- 	if sys.ParentProcess != 0 {
-@@ -324,7 +338,15 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle
- 	fd := make([]Handle, len(attr.Files))
- 	for i := range attr.Files {
- 		if attr.Files[i] > 0 {
--			err := DuplicateHandle(p, Handle(attr.Files[i]), parentProcess, &fd[i], 0, true, DUPLICATE_SAME_ACCESS)
-+			destinationProcessHandle := parentProcess
-+
-+			// On Windows 7, console handles aren't real handles, and can only be duplicated
-+			// into the current process, not a parent one, which amounts to the same thing.
-+			if parentProcess != p && isLegacyWin7ConsoleHandle(Handle(attr.Files[i])) {
-+				destinationProcessHandle = p
-+			}
-+
-+			err := DuplicateHandle(p, Handle(attr.Files[i]), destinationProcessHandle, &fd[i], 0, true, DUPLICATE_SAME_ACCESS)
- 			if err != nil {
- 				return 0, 0, err
- 			}
-@@ -355,6 +377,14 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle
- 
- 	fd = append(fd, sys.AdditionalInheritedHandles...)
- 
-+	// On Windows 7, console handles aren't real handles, so don't pass them
-+	// through to PROC_THREAD_ATTRIBUTE_HANDLE_LIST.
-+	for i := range fd {
-+		if isLegacyWin7ConsoleHandle(fd[i]) {
-+			fd[i] = 0
-+		}
-+	}
-+
- 	// The presence of a NULL handle in the list is enough to cause PROC_THREAD_ATTRIBUTE_HANDLE_LIST
- 	// to treat the entire list as empty, so remove NULL handles.
- 	j := 0
+-func rootRemoveAll(r *Root, name string) error {
+-	// Consistency with os.RemoveAll: Strip trailing /s from the name,
+-	// so RemoveAll("not_a_directory/") succeeds.
+-	for len(name) > 0 && IsPathSeparator(name[len(name)-1]) {
+-		name = name[:len(name)-1]
+-	}
+-	if endsWithDot(name) {
+-		// Consistency with os.RemoveAll: Return EINVAL when trying to remove .
+-		return &PathError{Op: "RemoveAll", Path: name, Err: syscall.EINVAL}
+-	}
+-	_, err := doInRoot(r, name, nil, func(parent sysfdType, name string) (struct{}, error) {
+-		return struct{}{}, removeAllFrom(parent, name)
+-	})
+-	if IsNotExist(err) {
+-		return nil
+-	}
+-	if err != nil {
+-		return &PathError{Op: "RemoveAll", Path: name, Err: underlyingError(err)}
+-	}
+-	return err
+-}
+-
+ func rootRename(r *Root, oldname, newname string) error {
+ 	_, err := doInRoot(r, oldname, nil, func(oldparent sysfdType, oldname string) (struct{}, error) {
+ 		_, err := doInRoot(r, newname, nil, func(newparent sysfdType, newname string) (struct{}, error) {
 diff --git a/src/runtime/os_windows.go b/src/runtime/os_windows.go
-index 5cd9bfeed2d726..00b63cb8c38b4a 100644
+index 1688ba910e..c520db7cf8 100644
 --- a/src/runtime/os_windows.go
 +++ b/src/runtime/os_windows.go
-@@ -39,8 +39,8 @@ const (
+@@ -40,7 +40,8 @@ const (
  //go:cgo_import_dynamic runtime._GetSystemInfo GetSystemInfo%1 "kernel32.dll"
  //go:cgo_import_dynamic runtime._GetThreadContext GetThreadContext%2 "kernel32.dll"
  //go:cgo_import_dynamic runtime._SetThreadContext SetThreadContext%2 "kernel32.dll"
 -//go:cgo_import_dynamic runtime._LoadLibraryExW LoadLibraryExW%3 "kernel32.dll"
- //go:cgo_import_dynamic runtime._LoadLibraryW LoadLibraryW%1 "kernel32.dll"
++//go:cgo_import_dynamic runtime._LoadLibraryW LoadLibraryW%1 "kernel32.dll"
 +//go:cgo_import_dynamic runtime._LoadLibraryA LoadLibraryA%1 "kernel32.dll"
  //go:cgo_import_dynamic runtime._PostQueuedCompletionStatus PostQueuedCompletionStatus%4 "kernel32.dll"
  //go:cgo_import_dynamic runtime._QueryPerformanceCounter QueryPerformanceCounter%1 "kernel32.dll"
  //go:cgo_import_dynamic runtime._QueryPerformanceFrequency QueryPerformanceFrequency%1 "kernel32.dll"
-@@ -74,7 +74,6 @@ var (
+@@ -74,7 +75,6 @@ var (
  	// Following syscalls are available on every Windows PC.
  	// All these variables are set by the Windows executable
  	// loader before the Go program starts.
@@ -557,20 +394,22 @@ index 5cd9bfeed2d726..00b63cb8c38b4a 100644
  	_AddVectoredExceptionHandler,
  	_CloseHandle,
  	_CreateEventA,
-@@ -97,8 +96,8 @@ var (
+@@ -97,7 +97,8 @@ var (
  	_GetSystemInfo,
  	_GetThreadContext,
  	_SetThreadContext,
 -	_LoadLibraryExW,
- 	_LoadLibraryW,
++	_LoadLibraryW,
 +	_LoadLibraryA,
  	_PostQueuedCompletionStatus,
  	_QueryPerformanceCounter,
  	_QueryPerformanceFrequency,
-@@ -127,6 +126,14 @@ var (
+@@ -126,8 +127,23 @@ var (
  	_WriteFile,
  	_ stdFunction
  
+-	// Use ProcessPrng to generate cryptographically random data.
+-	_ProcessPrng stdFunction
 +	// Following syscalls are only available on some Windows PCs.
 +	// We will load syscalls, if available, before using them.
 +	_AddDllDirectory,
@@ -579,29 +418,39 @@ index 5cd9bfeed2d726..00b63cb8c38b4a 100644
 +	_LoadLibraryExW,
 +	_ stdFunction
 +
- 	// Use RtlGenRandom to generate cryptographically random data.
- 	// This approach has been recommended by Microsoft (see issue
- 	// 15589 for details).
-@@ -152,13 +159,6 @@ var (
++	// Use RtlGenRandom to generate cryptographically random data.
++	// This approach has been recommended by Microsoft (see issue
++	// 15589 for details).
++	// The RtlGenRandom is not listed in advapi32.dll, instead
++	// RtlGenRandom function can be found by searching for SystemFunction036.
++	// Also some versions of Mingw cannot link to SystemFunction036
++	// when building executable as Cgo. So load SystemFunction036
++	// manually during runtime startup.
++	_RtlGenRandom stdFunction
+ 
+ 	// Load ntdll.dll manually during startup, otherwise Mingw
+ 	// links wrong printf function to cgo executable (see issue
+@@ -144,13 +160,6 @@ var (
  	_ stdFunction
  )
  
 -var (
--	advapi32dll = [...]uint16{'a', 'd', 'v', 'a', 'p', 'i', '3', '2', '.', 'd', 'l', 'l', 0}
--	ntdlldll    = [...]uint16{'n', 't', 'd', 'l', 'l', '.', 'd', 'l', 'l', 0}
--	powrprofdll = [...]uint16{'p', 'o', 'w', 'r', 'p', 'r', 'o', 'f', '.', 'd', 'l', 'l', 0}
--	winmmdll    = [...]uint16{'w', 'i', 'n', 'm', 'm', '.', 'd', 'l', 'l', 0}
+-	bcryptprimitivesdll = [...]uint16{'b', 'c', 'r', 'y', 'p', 't', 'p', 'r', 'i', 'm', 'i', 't', 'i', 'v', 'e', 's', '.', 'd', 'l', 'l', 0}
+-	ntdlldll            = [...]uint16{'n', 't', 'd', 'l', 'l', '.', 'd', 'l', 'l', 0}
+-	powrprofdll         = [...]uint16{'p', 'o', 'w', 'r', 'p', 'r', 'o', 'f', '.', 'd', 'l', 'l', 0}
+-	winmmdll            = [...]uint16{'w', 'i', 'n', 'm', 'm', '.', 'd', 'l', 'l', 0}
 -)
 -
  // Function to be called by windows CreateThread
  // to start new os thread.
  func tstart_stdcall(newm *m)
-@@ -251,8 +251,18 @@ func windows_GetSystemDirectory() string {
+@@ -242,9 +251,18 @@ func windows_GetSystemDirectory() string {
  	return unsafe.String(&sysDirectory[0], sysDirectoryLen)
  }
  
 -func windowsLoadSystemLib(name []uint16) uintptr {
--	return stdcall3(_LoadLibraryExW, uintptr(unsafe.Pointer(&name[0])), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
+-	const _LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x00000800
+-	return stdcall(_LoadLibraryExW, uintptr(unsafe.Pointer(&name[0])), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
 +//go:linkname syscall_getSystemDirectory syscall.getSystemDirectory
 +func syscall_getSystemDirectory() string {
 +	return unsafe.String(&sysDirectory[0], sysDirectoryLen)
@@ -609,21 +458,23 @@ index 5cd9bfeed2d726..00b63cb8c38b4a 100644
 +
 +func windowsLoadSystemLib(name []byte) uintptr {
 +	if useLoadLibraryEx {
-+		return stdcall3(_LoadLibraryExA, uintptr(unsafe.Pointer(&name[0])), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
++		return stdcall(_LoadLibraryExA, uintptr(unsafe.Pointer(&name[0])), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
 +	} else {
 +		absName := append(sysDirectory[:sysDirectoryLen], name...)
-+		return stdcall1(_LoadLibraryA, uintptr(unsafe.Pointer(&absName[0])))
++		return stdcall(_LoadLibraryA, uintptr(unsafe.Pointer(&absName[0])))
 +	}
  }
  
  //go:linkname windows_QueryPerformanceCounter internal/syscall/windows.QueryPerformanceCounter
-@@ -270,13 +280,28 @@ func windows_QueryPerformanceFrequency() int64 {
+@@ -262,13 +280,28 @@ func windows_QueryPerformanceFrequency() int64 {
  }
  
  func loadOptionalSyscalls() {
--	a32 := windowsLoadSystemLib(advapi32dll[:])
+-	bcryptPrimitives := windowsLoadSystemLib(bcryptprimitivesdll[:])
+-	if bcryptPrimitives == 0 {
+-		throw("bcryptprimitives.dll not found")
 +	var kernel32dll = []byte("kernel32.dll\000")
-+	k32 := stdcall1(_LoadLibraryA, uintptr(unsafe.Pointer(&kernel32dll[0])))
++	k32 := stdcall(_LoadLibraryA, uintptr(unsafe.Pointer(&kernel32dll[0])))
 +	if k32 == 0 {
 +		throw("kernel32.dll not found")
 +	}
@@ -632,15 +483,16 @@ index 5cd9bfeed2d726..00b63cb8c38b4a 100644
 +	_LoadLibraryExA = windowsFindfunc(k32, []byte("LoadLibraryExA\000"))
 +	_LoadLibraryExW = windowsFindfunc(k32, []byte("LoadLibraryExW\000"))
 +	useLoadLibraryEx = (_LoadLibraryExW != nil && _LoadLibraryExA != nil && _AddDllDirectory != nil)
-+	
++
 +	initSysDirectory()
-+	
++
 +	var advapi32dll = []byte("advapi32.dll\000")
 +	a32 := windowsLoadSystemLib(advapi32dll)
- 	if a32 == 0 {
- 		throw("advapi32.dll not found")
++	if a32 == 0 {
++		throw("advapi32.dll not found")
  	}
- 	_RtlGenRandom = windowsFindfunc(a32, []byte("SystemFunction036\000"))
+-	_ProcessPrng = windowsFindfunc(bcryptPrimitives, []byte("ProcessPrng\000"))
++	_RtlGenRandom = windowsFindfunc(a32, []byte("SystemFunction036\000"))
  
 -	n32 := windowsLoadSystemLib(ntdlldll[:])
 +	var ntdll = []byte("ntdll.dll\000")
@@ -648,7 +500,7 @@ index 5cd9bfeed2d726..00b63cb8c38b4a 100644
  	if n32 == 0 {
  		throw("ntdll.dll not found")
  	}
-@@ -305,7 +330,7 @@ func monitorSuspendResume() {
+@@ -297,7 +330,7 @@ func monitorSuspendResume() {
  		context  uintptr
  	}
  
@@ -657,7 +509,7 @@ index 5cd9bfeed2d726..00b63cb8c38b4a 100644
  	if powrprof == 0 {
  		return // Running on Windows 7, where we don't need it anyway.
  	}
-@@ -364,6 +389,22 @@ const (
+@@ -351,6 +384,22 @@ func getPageSize() uintptr {
  // in sys_windows_386.s and sys_windows_amd64.s:
  func getlasterror() uint32
  
@@ -680,7 +532,7 @@ index 5cd9bfeed2d726..00b63cb8c38b4a 100644
  var timeBeginPeriodRetValue uint32
  
  // osRelaxMinNS indicates that sysmon shouldn't osRelax if the next
-@@ -437,7 +478,8 @@ func initHighResTimer() {
+@@ -417,7 +466,8 @@ func initHighResTimer() {
  		// Only load winmm.dll if we need it.
  		// This avoids a dependency on winmm.dll for Go programs
  		// that run on new Windows versions.
@@ -690,55 +542,106 @@ index 5cd9bfeed2d726..00b63cb8c38b4a 100644
  		if m32 == 0 {
  			print("runtime: LoadLibraryExW failed; errno=", getlasterror(), "\n")
  			throw("winmm.dll not found")
-@@ -512,7 +554,6 @@ func osinit() {
+@@ -458,6 +508,28 @@ func initLongPathSupport() {
+ 	canUseLongPaths = true
+ }
+ 
++var osVersionInfo struct {
++	majorVersion uint32
++	minorVersion uint32
++	buildNumber  uint32
++}
++
++func initOsVersionInfo() {
++	info := windows.OSVERSIONINFOW{}
++	info.OSVersionInfoSize = uint32(unsafe.Sizeof(info))
++	stdcall(_RtlGetVersion, uintptr(unsafe.Pointer(&info)))
++	osVersionInfo.majorVersion = info.MajorVersion
++	osVersionInfo.minorVersion = info.MinorVersion
++	osVersionInfo.buildNumber = info.BuildNumber
++}
++
++//go:linkname rtlGetNtVersionNumbers syscall.rtlGetNtVersionNumbers
++func rtlGetNtVersionNumbers(majorVersion *uint32, minorVersion *uint32, buildNumber *uint32) {
++	*majorVersion = osVersionInfo.majorVersion
++	*minorVersion = osVersionInfo.minorVersion
++	*buildNumber = osVersionInfo.buildNumber
++}
++
+ func osinit() {
+ 	asmstdcallAddr = unsafe.Pointer(windows.AsmStdCallAddr())
+ 
+@@ -470,8 +542,8 @@ func osinit() {
  	initHighResTimer()
  	timeBeginPeriodRetValue = osRelax(false)
  
 -	initSysDirectory()
  	initLongPathSupport()
- 	initOsVersionInfo()
++	initOsVersionInfo()
  
+ 	numCPUStartup = getCPUCount()
+ 
+@@ -487,7 +559,7 @@ func osinit() {
+ //go:nosplit
+ func readRandom(r []byte) int {
+ 	n := 0
+-	if stdcall(_ProcessPrng, uintptr(unsafe.Pointer(&r[0])), uintptr(len(r)))&0xff != 0 {
++	if stdcall(_RtlGenRandom, uintptr(unsafe.Pointer(&r[0])), uintptr(len(r)))&0xff != 0 {
+ 		n = len(r)
+ 	}
+ 	return n
 diff --git a/src/runtime/syscall_windows.go b/src/runtime/syscall_windows.go
-index 85b1b8c9024a73..92a158bf0a846e 100644
+index 9ad21c8649..41b52851cc 100644
 --- a/src/runtime/syscall_windows.go
 +++ b/src/runtime/syscall_windows.go
-@@ -413,10 +413,20 @@ func callbackWrap(a *callbackArgs) {
+@@ -403,6 +403,11 @@ func callbackWrap(a *callbackArgs) {
+ 	}
+ }
  
- const _LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x00000800
++const _LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x00000800
++
++// golang.org/x/sys linknames syscall.getprocaddress
++// (in addition to standard package syscall).
++// Do not remove or change the type signature.
+ // syscall_syscalln calls fn with args[:n].
+ // It is used to implement [syscall.SyscallN].
+ // It shouldn't be used in the runtime package,
+diff --git a/src/syscall/dll_windows.go b/src/syscall/dll_windows.go
+index 9d77986953..30c4d4a1ec 100644
+--- a/src/syscall/dll_windows.go
++++ b/src/syscall/dll_windows.go
+@@ -13,10 +13,12 @@ import (
  
-+// When available, this function will use LoadLibraryEx with the filename
-+// parameter and the important SEARCH_SYSTEM32 argument. But on systems that
-+// do not have that option, absoluteFilepath should contain a fallback
-+// to the full path inside of system32 for use with vanilla LoadLibrary.
-+//
- //go:linkname syscall_loadsystemlibrary syscall.loadsystemlibrary
--func syscall_loadsystemlibrary(filename *uint16) (handle, err uintptr) {
--	handle, _, err = syscall_SyscallN(uintptr(unsafe.Pointer(_LoadLibraryExW)), uintptr(unsafe.Pointer(filename)), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
-+func syscall_loadsystemlibrary(filename *uint16, absoluteFilepath *uint16) (handle, err uintptr) {
-+	if useLoadLibraryEx {
-+		handle, _, err = syscall_SyscallN(uintptr(unsafe.Pointer(_LoadLibraryExW)), uintptr(unsafe.Pointer(filename)), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
+ // Use double underscore to avoid name collision autogenerated functions.
+ //go:cgo_import_dynamic syscall.__LoadLibraryExW LoadLibraryExW%3 "kernel32.dll"
++//go:cgo_import_dynamic syscall._LoadLibraryW LoadLibraryW%1 "kernel32.dll"
+ //go:cgo_import_dynamic syscall.__GetProcAddress GetProcAddress%2 "kernel32.dll"
+ 
+ var (
+ 	__LoadLibraryExW unsafe.Pointer
++	_LoadLibraryW    unsafe.Pointer
+ 	__GetProcAddress unsafe.Pointer
+ )
+ 
+@@ -119,9 +121,15 @@ func loadlibrary(filename *uint16) (uintptr, Errno) {
+ }
+ 
+ //go:linkname loadsystemlibrary
+-func loadsystemlibrary(filename *uint16) (uintptr, Errno) {
++func loadsystemlibrary(filename *uint16, absoluteFilepath *uint16) (uintptr, Errno) {
+ 	const _LOAD_LIBRARY_SEARCH_SYSTEM32 = 0x00000800
+-	handle, _, err := SyscallN(uintptr(__LoadLibraryExW), uintptr(unsafe.Pointer(filename)), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
++	var handle uintptr
++	var err Errno
++	if absoluteFilepath == nil {
++		handle, _, err = SyscallN(uintptr(__LoadLibraryExW), uintptr(unsafe.Pointer(filename)), 0, _LOAD_LIBRARY_SEARCH_SYSTEM32)
 +	} else {
-+		handle, _, err = syscall_SyscallN(uintptr(unsafe.Pointer(_LoadLibraryW)), uintptr(unsafe.Pointer(absoluteFilepath)))
++		handle, _, err = SyscallN(uintptr(_LoadLibraryW), uintptr(unsafe.Pointer(absoluteFilepath)))
 +	}
- 	KeepAlive(filename)
-+	KeepAlive(absoluteFilepath)
  	if handle != 0 {
  		err = 0
  	}
-diff --git a/src/syscall/dll_windows.go b/src/syscall/dll_windows.go
-index a7873e6ad8c93e..d9371d35006359 100644
---- a/src/syscall/dll_windows.go
-+++ b/src/syscall/dll_windows.go
-@@ -45,7 +45,7 @@ func Syscall18(trap, nargs, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a
- //go:noescape
- func SyscallN(trap uintptr, args ...uintptr) (r1, r2 uintptr, err Errno)
- func loadlibrary(filename *uint16) (handle uintptr, err Errno)
--func loadsystemlibrary(filename *uint16) (handle uintptr, err Errno)
-+func loadsystemlibrary(filename *uint16, absoluteFilepath *uint16) (handle uintptr, err Errno)
- func getprocaddress(handle uintptr, procname *uint8) (proc uintptr, err Errno)
- 
- // A DLL implements access to a single DLL.
-@@ -54,6 +54,9 @@ type DLL struct {
+@@ -143,6 +151,9 @@ type DLL struct {
  	Handle Handle
  }
  
@@ -748,7 +651,7 @@ index a7873e6ad8c93e..d9371d35006359 100644
  // LoadDLL loads the named DLL file into memory.
  //
  // If name is not an absolute path and is not a known system DLL used by
-@@ -70,7 +73,11 @@ func LoadDLL(name string) (*DLL, error) {
+@@ -159,7 +170,11 @@ func LoadDLL(name string) (*DLL, error) {
  	var h uintptr
  	var e Errno
  	if sysdll.IsSystemDLL[name] {
@@ -761,3 +664,75 @@ index a7873e6ad8c93e..d9371d35006359 100644
  	} else {
  		h, e = loadlibrary(namep)
  	}
+diff --git a/src/syscall/exec_windows.go b/src/syscall/exec_windows.go
+index 96089fcd93..e6bec34005 100644
+--- a/src/syscall/exec_windows.go
++++ b/src/syscall/exec_windows.go
+@@ -15,7 +15,6 @@ import (
+ 	"unsafe"
+ )
+ 
+-// ForkLock is not used on Windows.
+ var ForkLock sync.RWMutex
+ 
+ // EscapeArg rewrites command line argument s as prescribed
+@@ -304,6 +303,9 @@ type SysProcAttr struct {
+ var zeroProcAttr ProcAttr
+ var zeroSysProcAttr SysProcAttr
+ 
++//go:linkname rtlGetNtVersionNumbers
++func rtlGetNtVersionNumbers(majorVersion *uint32, minorVersion *uint32, buildNumber *uint32)
++
+ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle uintptr, err error) {
+ 	if len(argv0) == 0 {
+ 		return 0, 0, EWINDOWS
+@@ -367,6 +369,17 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle
+ 		}
+ 	}
+ 
++	var maj, min, build uint32
++	rtlGetNtVersionNumbers(&maj, &min, &build)
++	isWin7 := maj < 6 || (maj == 6 && min <= 1)
++	// NT kernel handles are divisible by 4, with the bottom 3 bits left as
++	// a tag. The fully set tag correlates with the types of handles we're
++	// concerned about here.  Except, the kernel will interpret some
++	// special handle values, like -1, -2, and so forth, so kernelbase.dll
++	// checks to see that those bottom three bits are checked, but that top
++	// bit is not checked.
++	isLegacyWin7ConsoleHandle := func(handle Handle) bool { return isWin7 && handle&0x10000003 == 3 }
++
+ 	p, _ := GetCurrentProcess()
+ 	parentProcess := p
+ 	if sys.ParentProcess != 0 {
+@@ -375,7 +388,15 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle
+ 	fd := make([]Handle, len(attr.Files))
+ 	for i := range attr.Files {
+ 		if attr.Files[i] > 0 {
+-			err := DuplicateHandle(p, Handle(attr.Files[i]), parentProcess, &fd[i], 0, true, DUPLICATE_SAME_ACCESS)
++			destinationProcessHandle := parentProcess
++
++			// On Windows 7, console handles aren't real handles, and can only be duplicated
++			// into the current process, not a parent one, which amounts to the same thing.
++			if parentProcess != p && isLegacyWin7ConsoleHandle(Handle(attr.Files[i])) {
++				destinationProcessHandle = p
++			}
++
++			err := DuplicateHandle(p, Handle(attr.Files[i]), destinationProcessHandle, &fd[i], 0, true, DUPLICATE_SAME_ACCESS)
+ 			if err != nil {
+ 				return 0, 0, err
+ 			}
+@@ -406,6 +427,14 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle
+ 
+ 	fd = append(fd, sys.AdditionalInheritedHandles...)
+ 
++	// On Windows 7, console handles aren't real handles, so don't pass them
++	// through to PROC_THREAD_ATTRIBUTE_HANDLE_LIST.
++	for i := range fd {
++		if isLegacyWin7ConsoleHandle(fd[i]) {
++			fd[i] = 0
++		}
++	}
++
+ 	// The presence of a NULL handle in the list is enough to cause PROC_THREAD_ATTRIBUTE_HANDLE_LIST
+ 	// to treat the entire list as empty, so remove NULL handles.
+ 	j := 0
