@@ -61,7 +61,7 @@ jobs:
       - name: Set-up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.5'
+          go-version: '1.26rc2'
         # with:
         #   go-version-file: 'src/go.mod'
         #   check-latest: true
