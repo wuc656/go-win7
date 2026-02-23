@@ -28,7 +28,7 @@ jobs:
     strategy:
       matrix:
         goos: [windows]
-        goarch: [amd64, 386]
+        goarch: [amd64]
         buildtarget: ['release-branch.go1.22']
       fail-fast: false
     env:
