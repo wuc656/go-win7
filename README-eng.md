@@ -93,6 +93,8 @@ These patches must be applied from up to down:
 
 #### Patches for Windows 7 / Windows Server 2008 R2
 
+##### NOTE: Due to changes and adjustments from upstream, 1.25.0-1.25.7 dost not share the same patch with 1.25.8 and onward. Below is a list of patches for 1.25.0-1.25.7.
+
 These patches must be applied from up to down:
 
 1. https://github.com/XTLS/go-win7/commit/0731a1bffeb285ee576629452e095bf833862b9b / [Git diff](https://github.com/XTLS/go-win7/commit/0731a1bffeb285ee576629452e095bf833862b9b.diff)
@@ -114,9 +116,9 @@ These patches must be applied from up to down:
 1. https://github.com/XTLS/go-win7/commit/c3e5e430625ba7ab5d638c753f94cc52253793f5 / [Git diff](https://github.com/XTLS/go-win7/commit/c3e5e430625ba7ab5d638c753f94cc52253793f5.diff)
 1. https://github.com/XTLS/go-win7/commit/0d36c60d2c0754fde7e4e7e4773e0349527cff08 / [Git diff](https://github.com/XTLS/go-win7/commit/0d36c60d2c0754fde7e4e7e4773e0349527cff08.diff)
 
-For Windows 7 SP1/Windows Server 2008 R2 SP1 without KB2533623 installed, these patches are also needed:
+For Windows 7 SP1/Windows Server 2008 R2 SP1 without KB2533623 or KB3125574 installed, these patches are also needed:
 
-1. https://github.com/XTLS/go-win7/raw/refs/heads/build/pre-KB2533623-1-26.diff
+1. https://github.com/XTLS/go-win7/raw/refs/heads/build/pre-KB3125574-1-26.diff
 
 For Windows 7/Windows Server 2008 R2 without SP1 installed, these patches are also needed:
 

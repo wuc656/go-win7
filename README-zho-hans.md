@@ -93,6 +93,8 @@
 
 #### 用于 Windows 7 / Windows Server 2008 R2 的补丁
 
+##### 注意：由于上游更改，1.25.0-1.25.7 与 1.25.8 及更新的版本不使用同一个补丁。以下为 1.25.0-1.25.7 使用的补丁列表。
+
 这些补丁必须按照从上到下的顺序来修补：
 
 1. https://github.com/XTLS/go-win7/commit/0731a1bffeb285ee576629452e095bf833862b9b / [Git diff](https://github.com/XTLS/go-win7/commit/0731a1bffeb285ee576629452e095bf833862b9b.diff)
@@ -114,9 +116,9 @@
 1. https://github.com/XTLS/go-win7/commit/c3e5e430625ba7ab5d638c753f94cc52253793f5 / [Git diff](https://github.com/XTLS/go-win7/commit/c3e5e430625ba7ab5d638c753f94cc52253793f5.diff)
 1. https://github.com/XTLS/go-win7/commit/0d36c60d2c0754fde7e4e7e4773e0349527cff08 / [Git diff](https://github.com/XTLS/go-win7/commit/0d36c60d2c0754fde7e4e7e4773e0349527cff08.diff)
 
-对于没有安装 KB2533623 的 Windows 7 SP1/Windows Server 2008 R2 SP1，应该同时添加以下补丁：
+对于没有安装 KB2533623 或 KB3125574 的 Windows 7 SP1/Windows Server 2008 R2 SP1，应该同时添加以下补丁：
 
-1. https://github.com/XTLS/go-win7/raw/refs/heads/build/pre-KB2533623-1-26.diff
+1. https://github.com/XTLS/go-win7/raw/refs/heads/build/pre-KB3125574-1-26.diff
 
 对于没有安装 SP1 的 Windows 7/Windows Server 2008 R2，应该同时添加以下补丁：
 
